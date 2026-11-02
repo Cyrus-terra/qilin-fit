@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "title": "麒麟 / 奇安信浏览器兼容性支持矩阵（待填模板）",
+  "status": "unknown",
+  "notice": "本文件不是设备实测结果，不表示任何环境已受支持；unknown/空数组待证据填充。",
+  "baselineChromium": {
+    "version": 102,
+    "status": "provisional",
+    "requiresConfirmation": true,
+    "note": "暂定工程讨论基线，不是已证实的最低支持版本；须核对产品要求、实际内核与真机证据后确认。"
+  },
+  "coverage": {
+    "source": "pending",
+    "build": "pending",
+    "probe": "pending",
+    "realDevice": "pending"
+  },
+  "environments": [],
+  "environmentTemplate": {
+    "id": "",
+    "os": {
+      "name": "unknown",
+      "version": "unknown",
+      "architecture": "unknown",
+      "verification": "pending"
+    },
+    "browser": {
+      "product": "unknown",
+      "fullVersion": "unknown",
+      "kernel": "unknown",
+      "kernelVersion": "unknown",
+      "architecture": "unknown",
+      "mode": "unknown",
+      "verification": "pending"
+    },
+    "device": {
+      "model": "unknown",
+      "gpu": "unknown",
+      "driver": "unknown",
+      "displayScale": "unknown"
+    },
+    "policy": {
+      "secureContext": "unknown",
+      "enterpriseRestrictions": "unknown"
+    },
+    "evidence": {
+      "sourceReview": [],
+      "build": [],
+      "probe": [],
+      "realDevice": []
+    },
+    "coverage": {
+      "source": "pending",
+      "build": "pending",
+      "probe": "pending",
+      "realDevice": "pending"
+    },
+    "results": [],
+    "overall": "unknown"
+  },
+  "resultTemplate": {
+    "capability": "unknown",
+    "status": "unknown",
+    "evidenceLevel": "unknown",
+    "sourceReferences": [],
+    "buildEvidence": [],
+    "probeEvidence": [],
+    "realDeviceEvidence": [],
+    "expected": "",
+    "observed": "",
+    "workaround": "",
+    "limitations": []
+  },
+  "evidenceRules": [
+    "仅把有证据的环境对象加入 environments；不要把模板或暂定基线视作测试通过。",
+    "每个环境记录操作系统版本和架构、浏览器完整版本、实际内核版本、浏览器模式与企业策略；人工录入字段须保留未经验证标记直至人工核对。",
+    "source/build/probe/realDevice 分层记录；源码含降级路径或构建成功不等于真机支持。",
+    "probe 可引用同目录 browser-probe.html 用户主动导出的本地 JSON，分享前审阅环境及人工录入信息；不纳入 IME 测试输入内容。",
+    "CSS.supports 仅语法接受；API 属性存在不等于策略允许或可实际调用；computed color 不验证截图或色彩准确性。",
+    "WebGL、GPU、字体、IME、弹窗、滚动、布局、缩放、暗色和焦点须按真实业务在目标真机人工验收；本探针不创建 GPU 上下文。",
+    "未执行的项目保持 unknown 或 pending，不填写推测的设备结果、截图结论或通过状态。"
+  ],
+  "allowedValues": {
+    "coverage": [
+      "pending",
+      "complete",
+      "blocked",
+      "not-applicable"
+    ],
+    "result": [
+      "unknown",
+      "pass",
+      "fail",
+      "partial",
+      "not-applicable"
+    ],
+    "evidenceLevel": [
+      "unknown",
+      "source",
+      "build",
+      "probe",
+      "realDevice"
+    ]
+  }
+}

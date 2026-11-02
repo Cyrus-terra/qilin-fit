@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'none'; media-src 'none'; object-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'">
+<title>麒麟 / 奇安信浏览器离线兼容性探针</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; padding: 20px; background: #f4f6f8; color: #17212b; font: 16px/1.6 "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif; }
+main { max-width: 1080px; margin: 0 auto; }
+h1 { font-size: 26px; line-height: 1.4; }
+h2 { font-size: 21px; margin-top: 0; }
+h3 { font-size: 17px; }
+section { margin: 20px 0; padding: 20px; background: #fff; border: 1px solid #aab7c4; border-radius: 8px; }
+p { margin: 8px 0; }
+button, input, select, textarea { font: inherit; }
+button, select { padding: 7px 12px; min-height: 40px; }
+button { cursor: pointer; background: #eaf1ff; color: #102447; border: 1px solid #536a86; border-radius: 4px; margin: 4px; }
+input, textarea { padding: 8px; border: 1px solid #536a86; border-radius: 4px; background: #fff; color: #17212b; max-width: 100%; }
+input { width: 100%; }
+label { display: block; margin: 12px 0 4px; }
+:focus { outline: 3px solid #0067d6; outline-offset: 3px; }
+a.skip { position: absolute; left: -10000px; }
+a.skip:focus { position: static; display: inline-block; padding: 8px; background: #fff; color: #102447; }
+.note { border-left: 4px solid #9a6800; padding-left: 12px; }
+.small { font-size: 14px; }
+pre { white-space: pre-wrap; word-wrap: break-word; background: #eef2f6; color: #17212b; padding: 12px; border: 1px solid #aab7c4; max-height: 360px; overflow: auto; }
+.table-scroll { overflow: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { border: 1px solid #aab7c4; padding: 8px; text-align: left; vertical-align: top; }
+.swatch { display: inline-block; width: 145px; height: 76px; margin: 6px; padding: 8px; color: #111; background: #bbb; border: 2px solid #222; vertical-align: top; }
+#color-hex { background-color: #40b882; }
+#color-lab { background-color: #bbb; background-color: lab(65% -42 20); }
+#color-oklch { background-color: #bbb; background-color: oklch(70% 0.15 150); }
+#color-mix { background-color: #bbb; background-color: color-mix(in srgb, #40b882 70%, white); }
+.modern-css { --probe-space: 12px; padding: 12px; padding: var(--probe-space); border: 2px solid #536a86; width: 90%; width: min(90%, 620px); font-size: 18px; font-size: clamp(16px, 2vw, 24px); }
+.mock-area { display: inline-block; position: relative; width: 280px; max-width: 100%; height: 180px; border: 1px dashed #536a86; margin: 6px; overflow: auto; vertical-align: top; }
+.mock-title { padding: 6px; }
+.mock-card { position: absolute; top: 50%; left: 50%; width: 180px; padding: 8px; background: #d8ebff; color: #17212b; border: 1px solid #536a86; }
+.legacy-transform { transform: translate(-50%, -50%); }
+.modern-translate { translate: -50% -50%; }
+.flex-probe { display: flex; flex-wrap: wrap; gap: 12px; border: 1px dashed #536a86; padding: 10px; }
+.flex-probe span, .grid-probe span { background: #d8ebff; color: #17212b; padding: 8px; border: 1px solid #536a86; }
+.grid-probe { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 10px; border: 1px dashed #536a86; }
+.scroll-probe { height: 120px; overflow: auto; border: 2px solid #536a86; padding: 8px; }
+.scroll-wide { width: 850px; max-width: none; min-height: 230px; background: repeating-linear-gradient(0deg, #edf5ff, #edf5ff 28px, #d4e5f8 28px, #d4e5f8 56px); color: #17212b; }
+.viewport-box { width: 100%; height: 20vh; height: 20dvh; min-height: 60px; max-height: 220px; background: #d8ebff; color: #17212b; border: 2px solid #536a86; padding: 10px; }
+.overlay { display: none; position: fixed; z-index: 10; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0,0,0,.65); }
+.dialog-panel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 440px; max-width: 90%; max-height: 85%; overflow: auto; padding: 22px; background: #fff; color: #17212b; border: 2px solid #536a86; border-radius: 8px; }
+body.dark { background: #111922; color: #edf2f7; }
+body.dark section { background: #1e2b38; border-color: #90a5bb; }
+body.dark button { background: #293f58; color: #fff; border-color: #a9c2df; }
+body.dark input, body.dark textarea, body.dark select { background: #111922; color: #edf2f7; border-color: #a9c2df; }
+body.dark pre { background: #111922; color: #edf2f7; }
+body.dark :focus { outline-color: #ffcf5a; }
+@media (max-width: 620px) { body { padding: 10px; } section { padding: 12px; } .grid-probe { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#probe-main">跳到探针内容</a>
+<main id="probe-main" tabindex="-1">
+<h1>麒麟 / 奇安信浏览器离线兼容性探针</h1>
+<p>直接在目标浏览器打开此文件。页面无外部依赖、无网络请求，不请求权限，不读取存储内容、Cookie 或 IP，不注册 Worker / Service Worker，不创建 GPU 上下文。</p>
+<p class="note">本页只是初筛：CSS.supports 仅表示语法接受，不等于正确布局或渲染；API 存在不等于可调用、策略许可或业务可用。computed style 不能验证截图、显示色彩或 GPU 渲染。最终须在目标真机验收。</p>
+<button id="refresh" type="button">刷新检测与视口</button>
+<button id="theme" type="button" aria-pressed="false">切换手动暗色</button>
+<span id="status" role="status" aria-live="polite"></span>
+<noscript>JavaScript 已禁用：自动检测与导出不可用，仍可检查静态视觉内容。</noscript>
+
+<section aria-labelledby="env-heading">
+<h2 id="env-heading">1. 环境信息与人工补充</h2>
+<p class="small">UA 及低熵 Client Hints 由浏览器自行报告，可能被精简或改写，不能据此断言操作系统补丁、架构或完整内核版本。只读取已存在的低熵属性，不调用 getHighEntropyValues。</p>
+<pre id="environment">等待检测</pre>
+<p>以下字段由测试人员录入，导出时始终标记为“未经验证的用户输入”；不进行自动识别或版本推断。请勿填写姓名、账号或其他个人信息。</p>
+<label for="os-version">操作系统及版本（人工录入）</label><input id="os-version" maxlength="120" placeholder="待填 / unknown" autocomplete="off">
+<label for="architecture">操作系统 / 浏览器架构（人工录入）</label><input id="architecture" maxlength="80" placeholder="待填 / unknown" autocomplete="off">
+<label for="browser-version">浏览器完整版本（人工录入）</label><input id="browser-version" maxlength="120" placeholder="待填 / unknown" autocomplete="off">
+<label for="kernel-version">浏览器内核及完整版本（人工录入）</label><input id="kernel-version" maxlength="120" placeholder="待填 / unknown" autocomplete="off">
+<p class="small">可从系统与浏览器“关于”界面人工核对；不要把浏览器产品版本直接当作 Chromium 内核版本。</p>
+</section>
+
+<section aria-labelledby="feature-heading">
+<h2 id="feature-heading">2. 非侵入式能力检测</h2>
+<p>“存在”只检查属性，不实际请求存储、网络、权限或 GPU。安全上下文、企业策略、驱动和浏览器模式均可能进一步限制能力。</p>
+<div class="table-scroll"><table><thead><tr><th scope="col">检测项</th><th scope="col">结果</th><th scope="col">解释</th></tr></thead><tbody id="features-body"></tbody></table></div>
+</section>
+
+<section aria-labelledby="color-heading">
+<h2 id="color-heading">3. CSS 颜色与现代语法</h2>
+<p>观察色块：基础 HEX 应为绿色。后三块有灰色回退；灰色可提示声明未生效，但绿色也不能证明显示色域、混色和截图正确。请与已验收参考截图人工比较。</p>
+<div class="swatch" id="color-hex">HEX 基础色</div>
+<div class="swatch" id="color-lab">lab()</div>
+<div class="swatch" id="color-oklch">oklch()</div>
+<div class="swatch" id="color-mix">color-mix()</div>
+<pre id="computed-colors">等待 computed style</pre>
+<div class="modern-css">CSS 变量 / min() / clamp()：缩放窗口，检查宽度、内边距、字号与换行，不能只看语法返回值。</div>
+</section>
+
+<section aria-labelledby="dialog-heading">
+<h2 id="dialog-heading">4. transform 与弹窗对照</h2>
+<p>两张示例卡应分别位于虚线框中央。右侧独立 translate 属性不支持时会偏离中央；左侧传统 transform 是对照，不代表所有合成层场景都正确。</p>
+<div class="mock-area"><div class="mock-title">传统 transform</div><div class="mock-card legacy-transform">中文弹窗内容<br>确认 / 取消位置对照</div></div>
+<div class="mock-area"><div class="mock-title">独立 translate 属性</div><div class="mock-card modern-translate">中文弹窗内容<br>确认 / 取消位置对照</div></div>
+<p><button id="open-dialog" type="button">打开传统 transform 弹窗</button></p>
+<p class="small">弹窗使用普通 div 与 ARIA，不依赖原生 dialog。检查居中、遮罩、中文、滚动、Tab / Shift+Tab 焦点循环、Escape 关闭和焦点返回。</p>
+</section>
+
+<section aria-labelledby="input-heading">
+<h2 id="input-heading">5. 中文字体与 IME（不导出输入）</h2>
+<p>简体中文：麒麟、兼容、窗口、字体；繁體中文：測試與視窗；标点：“引号”、顿号，句号。ABC 0123456789。</p>
+<label for="ime-input">在这里手动输入中文、切换输入法、移动光标并选择文字</label>
+<textarea id="ime-input" rows="3" cols="60" autocomplete="off" spellcheck="false" placeholder="本页不读取、不导出此框内容。"></textarea>
+<p class="small">探针不读取此框 value，不监听输入 / composition 内容，不导出输入文本。请仍避免输入真实个人资料；浏览器或系统自身的输入法行为不在本探针控制范围内。</p>
+</section>
+
+<section aria-labelledby="layout-heading">
+<h2 id="layout-heading">6. 滚动 / Grid / Flex / gap / 视口</h2>
+<h3>Flex gap：各项目之间预期有 12px 间距</h3>
+<div class="flex-probe"><span>项目一</span><span>项目二</span><span>项目三</span><span>项目四</span></div>
+<h3>Grid：宽屏三列，窄屏两列，预期有 12px 间距</h3>
+<div class="grid-probe"><span>网格一</span><span>网格二</span><span>网格三</span><span>网格四</span></div>
+<h3>滚动：使用鼠标、触控板、键盘方向键测试横向与纵向滚动</h3>
+<div class="scroll-probe" tabindex="0" role="region" aria-label="双向滚动测试区"><div class="scroll-wide">左上角 — 向右和向下滚动，检查文字和条纹是否完整。<br>宽内容用于检查水平滚动条。<br>请检查缩放后是否仍可操作。</div></div>
+<h3>视口：20dvh（不支持时回退 20vh），有高度上下限</h3>
+<div class="viewport-box">调整窗口、系统缩放或浏览器缩放后点“刷新检测与视口”，并人工核对尺寸与裁切。</div>
+<p>键盘依次 Tab 到按钮、输入框、下拉框、滚动区，检查焦点轮廓；再切换手动暗色，检查文字、边框与焦点对比度。暗色为手动开关，不代表系统暗色策略已验收。</p>
+</section>
+
+<section aria-labelledby="review-heading">
+<h2 id="review-heading">7. 人工验收记录</h2>
+<p>以下状态仅由测试人员选择，不由本页推断。通过需依据目标真机实测；未执行保持 unknown。WebGL 仅做存在性检查，实际视觉需用授权业务场景在真机验收。</p>
+<label for="review-colors">颜色与现代 CSS</label><select id="review-colors"><option value="unknown">unknown / 未执行</option><option value="pass">pass / 人工通过</option><option value="fail">fail / 人工失败</option></select>
+<label for="review-dialog">弹窗、transform 与焦点</label><select id="review-dialog"><option value="unknown">unknown / 未执行</option><option value="pass">pass / 人工通过</option><option value="fail">fail / 人工失败</option></select>
+<label for="review-ime">字体与中文 IME</label><select id="review-ime"><option value="unknown">unknown / 未执行</option><option value="pass">pass / 人工通过</option><option value="fail">fail / 人工失败</option></select>
+<label for="review-layout">滚动、Grid、Flex、gap 与视口</label><select id="review-layout"><option value="unknown">unknown / 未执行</option><option value="pass">pass / 人工通过</option><option value="fail">fail / 人工失败</option></select>
+<label for="review-dark">手动暗色与可见焦点</label><select id="review-dark"><option value="unknown">unknown / 未执行</option><option value="pass">pass / 人工通过</option><option value="fail">fail / 人工失败</option></select>
+<label for="review-webgl">WebGL 实际业务视觉（本页不执行）</label><select id="review-webgl"><option value="unknown">unknown / 未执行</option><option value="pass">pass / 已在真机业务场景人工通过</option><option value="fail">fail / 真机业务场景人工失败</option></select>
+</section>
+
+<section aria-labelledby="export-heading">
+<h2 id="export-heading">8. 用户点击后导出本地 JSON</h2>
+<p>仅点击下方按钮才会创建 Blob 并触发本地下载；不会上传或自动发送。报告包含环境元数据、检测结果、上述人工环境字段及人工验收状态，不包含 IME 测试框内容。分享前请审阅 UA 和人工字段。</p>
+<button id="export" type="button">导出本地 JSON</button>
+<pre id="export-status" role="status" aria-live="polite">尚未导出。</pre>
+</section>
+</main>
+<div id="overlay" class="overlay" aria-hidden="true">
+<div id="dialog-panel" class="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="dialog-title" tabindex="-1">
+<h2 id="dialog-title">传统 transform 对照弹窗</h2>
+<p>中文内容应完整、居中、不裁切。这里使用 position + transform，不使用原生 dialog 或独立 translate 属性。</p>
+<p>请使用 Tab / Shift+Tab 循环切换两个按钮，Escape 关闭。关闭后焦点应回到“打开传统 transform 弹窗”。</p>
+<button id="dialog-confirm" type="button">确认并关闭</button><button id="dialog-close" type="button">取消并关闭</button>
+</div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var latest = null;
+  var lastFocus = null;
+  var dialogOpen = false;
+  function byId(id) { return document.getElementById(id); }
+  function text(id, value) { byId(id).textContent = value; }
+  function has(object, name) { return !!object && name in object; }
+  function syntax(property, value) {
+    if (!window.CSS || typeof window.CSS.supports !== 'function') { return 'unknown'; }
+    try { return window.CSS.supports(property, value); } catch (error) { return 'unknown'; }
+  }
+  function getHints() {
+    var data = navigator.userAgentData;
+    var hints = { available: !!data, note: '仅浏览器已存在的低熵属性；未调用 getHighEntropyValues；未经独立验证' };
+    var i;
+    if (data) {
+      hints.brands = [];
+      if (data.brands) {
+        for (i = 0; i < data.brands.length; i += 1) {
+          hints.brands.push({ brand: data.brands[i].brand, version: data.brands[i].version });
+        }
+      }
+      hints.mobile = typeof data.mobile === 'boolean' ? data.mobile : 'unknown';
+      hints.platform = typeof data.platform === 'string' ? data.platform : 'unknown';
+    }
+    return hints;
+  }
+  function detect() {
+    var features = [];
+    var canvasPrototype = window.HTMLCanvasElement ? window.HTMLCanvasElement.prototype : null;
+    var colorIds = ['color-hex', 'color-lab', 'color-oklch', 'color-mix'];
+    var colors = {};
+    var i;
+    function api(name, present) { features.push({ name: name, kind: 'api-presence-only', result: !!present, note: '仅属性存在；未调用，不证明策略许可或可用' }); }
+    function css(name, property, value, note) { features.push({ name: name, kind: 'css-syntax-only', property: property, value: value, result: syntax(property, value), note: note || '仅语法接受；需人工确认实际布局与渲染' }); }
+    css('CSS 自定义属性', '--probe-color', 'green');
+    css('lab()', 'color', 'lab(65% -42 20)');
+    css('oklch()', 'color', 'oklch(70% 0.15 150)');
+    css('color-mix()', 'color', 'color-mix(in srgb, red, blue)');
+    css('Grid', 'display', 'grid');
+    css('Flex', 'display', 'flex');
+    css('gap（不能据此判断 flex gap）', 'gap', '12px');
+    css('传统 transform', 'transform', 'translate(-50%, -50%)');
+    css('独立 translate', 'translate', '-50% -50%');
+    css('min()', 'width', 'min(90%, 620px)');
+    css('clamp()', 'font-size', 'clamp(16px, 2vw, 24px)');
+    css('动态视口 dvh', 'height', '20dvh');
+    css('小视口 svh', 'height', '20svh');
+    css('大视口 lvh', 'height', '20lvh');
+    css('container-type（不代表全部容器查询）', 'container-type', 'inline-size', '仅 container-type:inline-size 属性语法接受；不等同全部 @container 查询支持，需人工确认实际布局与渲染');
+    function selector(name, value) {
+      var result = 'unknown';
+      if (window.CSS && typeof window.CSS.supports === 'function') {
+        try { result = window.CSS.supports(value); } catch (error) { result = 'unknown'; }
+      }
+      features.push({ name: name, kind: 'css-syntax-only', property: value, result: result, note: '仅选择器语法接受；不证明匹配、布局或渲染正确' });
+    }
+    selector(':focus-visible', 'selector(:focus-visible)');
+    selector(':has()', 'selector(:has(*))');
+    api('structuredClone', has(window, 'structuredClone'));
+    api('ResizeObserver', has(window, 'ResizeObserver'));
+    api('IntersectionObserver', has(window, 'IntersectionObserver'));
+    api('AbortController', has(window, 'AbortController'));
+    api('AbortSignal', has(window, 'AbortSignal'));
+    api('AbortSignal.timeout', has(window.AbortSignal, 'timeout'));
+    api('AbortSignal.any', has(window.AbortSignal, 'any'));
+    api('URL', has(window, 'URL'));
+    api('fetch', has(window, 'fetch'));
+    api('WebSocket', has(window, 'WebSocket'));
+    api('EventSource', has(window, 'EventSource'));
+    api('localStorage 属性（不读取对象或内容）', has(window, 'localStorage'));
+    api('sessionStorage 属性（不读取对象或内容）', has(window, 'sessionStorage'));
+    api('indexedDB 属性（不打开数据库）', has(window, 'indexedDB'));
+    api('StorageManager 属性（不调用 estimate/persist）', has(navigator, 'storage'));
+    api('Worker（不创建）', has(window, 'Worker'));
+    api('ServiceWorker 属性（不读取注册、不注册）', has(navigator, 'serviceWorker'));
+    api('Canvas getContext 方法（不调用）', has(canvasPrototype, 'getContext'));
+    api('WebGLRenderingContext（不创建 GPU 上下文）', has(window, 'WebGLRenderingContext'));
+    api('WebGL2RenderingContext（不创建 GPU 上下文）', has(window, 'WebGL2RenderingContext'));
+    api('Blob', has(window, 'Blob'));
+    api('URL.createObjectURL', has(window.URL, 'createObjectURL'));
+    for (i = 0; i < colorIds.length; i += 1) {
+      colors[colorIds[i]] = window.getComputedStyle ? window.getComputedStyle(byId(colorIds[i])).backgroundColor : 'unknown';
+    }
+    return {
+      schemaVersion: 1,
+      timestamp: new Date().toISOString(),
+      ua: navigator.userAgent || 'unknown',
+      platform: navigator.platform || 'unknown',
+      language: navigator.language || 'unknown',
+      clientHints: getHints(),
+      dpr: typeof window.devicePixelRatio === 'number' ? window.devicePixelRatio : null,
+      viewport: { width: window.innerWidth || document.documentElement.clientWidth, height: window.innerHeight || document.documentElement.clientHeight },
+      secureContext: typeof window.isSecureContext === 'boolean' ? window.isSecureContext : 'unknown',
+      features: features,
+      computedColors: { values: colors, note: '仅 computed backgroundColor；不能验证截图、显示色彩、GPU 或最终视觉正确性' },
+      limitations: ['离线无网络请求；不请求权限、不读取存储内容、不采集 Cookie 或 IP', 'CSS.supports 仅语法接受；API 属性存在不代表可用或策略许可', '未执行网络、存储、Worker、Service Worker 或 GPU 功能测试', 'WebGL 实际视觉、字体、IME、缩放、布局与企业策略必须在目标真机验收', 'UA 与低熵 Client Hints 由浏览器报告，可能精简或改写；人工环境字段未经验证', 'IME 测试输入框内容不读取、不导出']
+    };
+  }
+  function render() {
+    latest = detect();
+    var body = byId('features-body');
+    var i;
+    var j;
+    var row;
+    var cell;
+    var fields;
+    while (body.firstChild) { body.removeChild(body.firstChild); }
+    for (i = 0; i < latest.features.length; i += 1) {
+      row = document.createElement('tr');
+      fields = [latest.features[i].name, latest.features[i].result === true ? '是' : latest.features[i].result === false ? '否' : 'unknown', latest.features[i].note];
+      for (j = 0; j < fields.length; j += 1) {
+        cell = document.createElement('td');
+        cell.textContent = fields[j];
+        row.appendChild(cell);
+      }
+      body.appendChild(row);
+    }
+    text('environment', JSON.stringify({ timestamp: latest.timestamp, ua: latest.ua, platform: latest.platform, language: latest.language, clientHints: latest.clientHints, dpr: latest.dpr, viewport: latest.viewport, secureContext: latest.secureContext }, null, 2));
+    text('computed-colors', JSON.stringify(latest.computedColors, null, 2));
+    text('status', '已刷新；视觉与策略仍需人工确认。');
+  }
+  function manualValue(id) { var value = byId(id).value.replace(/^\s+|\s+$/g, ''); return value || 'unknown'; }
+  function exportReport() {
+    var report = detect();
+    var blob;
+    var url;
+    var link;
+    report.manualEnvironment = { verification: 'unverified-user-input', osVersion: manualValue('os-version'), architecture: manualValue('architecture'), browserFullVersion: manualValue('browser-version'), browserKernelVersion: manualValue('kernel-version') };
+    report.manualObservations = { source: 'manual-user-selection-not-automatically-verified', colors: byId('review-colors').value, dialogAndFocus: byId('review-dialog').value, fontAndIme: byId('review-ime').value, layoutAndViewport: byId('review-layout').value, darkAndFocus: byId('review-dark').value, webglRealDeviceVisual: byId('review-webgl').value };
+    report.presentation = { manualDark: document.body.className === 'dark' };
+    if (typeof window.Blob !== 'function' || !window.URL || typeof window.URL.createObjectURL !== 'function' || typeof window.URL.revokeObjectURL !== 'function') {
+      text('export-status', '此浏览器缺少 Blob 下载能力，未导出。请记录此限制，不会改用网络上传。');
+      return;
+    }
+    try {
+      blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' });
+      url = window.URL.createObjectURL(blob);
+      link = document.createElement('a');
+      link.href = url;
+      link.download = 'browser-probe-' + report.timestamp.replace(/[:.]/g, '-') + '.json';
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.setTimeout(function () { window.URL.revokeObjectURL(url); }, 1000);
+      text('export-status', '已发起本地 JSON 下载；请确认浏览器是否允许并保存成功。未上传。报告时间：' + report.timestamp);
+    } catch (error) {
+      if (link && link.parentNode) { link.parentNode.removeChild(link); }
+      if (url) { window.URL.revokeObjectURL(url); }
+      text('export-status', '本地下载失败或被策略阻止。未上传；请记录限制。');
+    }
+  }
+  function closeDialog() {
+    dialogOpen = false;
+    byId('overlay').style.display = 'none';
+    byId('overlay').setAttribute('aria-hidden', 'true');
+    if (lastFocus && lastFocus.focus) { lastFocus.focus(); }
+  }
+  byId('refresh').onclick = render;
+  byId('theme').onclick = function () {
+    var dark = document.body.className !== 'dark';
+    document.body.className = dark ? 'dark' : '';
+    byId('theme').setAttribute('aria-pressed', dark ? 'true' : 'false');
+  };
+  byId('open-dialog').onclick = function () {
+    lastFocus = document.activeElement;
+    dialogOpen = true;
+    byId('overlay').style.display = 'block';
+    byId('overlay').setAttribute('aria-hidden', 'false');
+    byId('dialog-confirm').focus();
+  };
+  byId('dialog-confirm').onclick = closeDialog;
+  byId('dialog-close').onclick = closeDialog;
+  document.addEventListener('keydown', function (event) {
+    var key = event.keyCode || event.which;
+    var first = byId('dialog-confirm');
+    var last = byId('dialog-close');
+    if (!dialogOpen) { return; }
+    if (key === 27) { event.preventDefault(); closeDialog(); }
+    if (key === 9) {
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === byId('dialog-panel'))) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+  });
+  document.addEventListener('focusin', function (event) {
+    if (dialogOpen && !byId('dialog-panel').contains(event.target)) { byId('dialog-confirm').focus(); }
+  });
+  byId('export').onclick = exportReport;
+  render();
+}());
+</script>
+</body>
+</html>
