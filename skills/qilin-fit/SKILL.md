@@ -1,10 +1,10 @@
 ---
 name: qilin-fit
-description: 为国产麒麟 Linux 与奇安信可信浏览器进行前端兼容开发、排错和评审。涉及麒麟、银河麒麟、中标麒麟、奇安信、信创、Qianxin、Kylin、旧 Chromium，或在已声明此目标环境的项目中新增/修改页面、CSS、Tailwind、组件库、JS/TS、构建配置、浏览器 API、字体、弹窗、下载与打印时使用；覆盖源码和构建产物检查、能力降级及真机验证。
+description: 为国产麒麟 Linux 与奇安信可信浏览器进行前端兼容开发、排错和评审。涉及麒麟、银河麒麟、中标麒麟、奇安信、信创、Qianxin、Kylin、旧 Chromium，或在已声明此目标环境的项目中新增/修改页面、CSS、Tailwind、组件库、JS/TS、构建配置、浏览器 API、字体、弹窗、下载与打印时使用；覆盖源码和构建产物检查、能力降级及真机验证。用户请求初始化、启用、停用或重置 qilin-fit，或首次确认项目兼容约束时也使用。
 license: MIT
 compatibility: 支持 Agent Skills 的代码 Agent。静态检查需要 Python 3.9+；离线探针用目标浏览器打开。必须由用户提供目标设备信息，真机测试不可由静态检查替代。
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   language: zh-CN
 ---
 
@@ -15,6 +15,29 @@ metadata:
 把兼容性作为本次实现的约束，不是做完页面再补颜色。此 Skill 适用于新开发、故障修复、依赖升级和评审；不要求特定框架。只处理任务涉及的风险，不无条件改写整个项目。
 
 **不能承诺覆盖所有奇安信版本。** 产品号、发布渠道和 Chromium 内核号不同；同一内核在不同 CPU、驱动和企业策略下也可能表现不同。未知信息必须标记待确认，不能伪造验证记录。
+
+## 0. 先检查项目决定，只确认一次
+
+1. 确定当前业务项目根目录；单仓/多仓/嵌套项目有歧义时先询问，不盲目使用父工作区或最外层 Git 根。
+2. 读取根目录 `.qilin-fit.json`，或用本 Skill 的 `scripts/setup.py --target <已确认项目根> --decision status` 查询。状态缺失为 unknown，损坏/未知格式须报告，不擅自覆盖。
+3. **enabled**：继续后续兼容工作流；相关开发无需用户每次重复声明。**disabled**：停止自动兼容流程，不重复询问、不自动配置。用户显式要求本次兼容检查/修复时可按本次授权执行，但不悄悄改变长期决定。
+4. **unknown**：通过 Agent 的用户对话提问：“是否为当前项目启用 qilin-fit 麒麟 / 奇安信兼容开发约束？启用会配置项目级规则；不启用会记住决定，不再自动询问；也可稍后决定。”只明确同意写 enabled，只明确拒绝写 disabled；取消或未回答保留 unknown，本会话不反复追问，先继续不依赖兼容约束的原始任务。
+5. 用户确认后，运行下面明确决定的命令；Agent shell 常为非交互，不要依赖脚本的 stdin 提问。`--agent` 选择当前/用户授权的客户端；要覆盖三个客户端先说明会更新哪些项目指令。不知道用哪个客户端时询问。
+
+```sh
+# 先替换占位符为已确认路径，enable 仅在用户明确同意后执行
+python3 "<skill-dir>/scripts/setup.py" --target "<project-root>" --agent "<当前且获授权的客户端>" --decision enable
+# 明确拒绝：记录 disabled 并移除本工具管理的项目规则块
+python3 "<skill-dir>/scripts/setup.py" --target "<project-root>" --decision disable
+# 用户主动要求重新确认时才 reset；不能用升级/重装自动清除拒绝
+python3 "<skill-dir>/scripts/setup.py" --target "<project-root>" --decision reset
+```
+
+上面的客户端占位符应替换为 `codebuddy`、`claude` 或 `codex`；只有先说明并获准更新三个客户端指令时，才使用 `--agent all`。
+
+配置器保留块外指令，不改依赖/业务代码。enable/disable/reset 是项目配置更改，应与用户已确认范围一致；`--dry-run` 可预览。明确要求“仅本次检查，不启用项目规则”的任务可直接做只读审计，不能借此持久启用。
+
+用户级安装还需可选全局提醒，才能在此前未接触的新项目第一次相关开发时询问；仅复制标准 Skill 不具备启动/安装回调。`setup.py --global-reminder` 管理用户级提醒，必须另外获得授权，不因为本项目同意就修改全局。该入口依赖宿主加载用户级指令，不是强制弹窗或钩子。
 
 ## 1. 先确定支持契约
 
@@ -91,4 +114,4 @@ python3 "<skill-dir>/scripts/compat_audit.py" ./src --min-chromium 102 --fail-on
 - **验证结果**：源码、产物、普通浏览器、麒麟真机分别写 pass/fail/not-run，不混为一个“通过”。
 - **残余风险**：无法验证的版本、策略/硬件限制及需用户确认的取舍。
 
-Skill 描述用于自动匹配；如必须每次触发，应由使用项目的 Agent 指令明确要求在相关开发前加载本 Skill。Skill 自身不能替代宿主发现机制，也不能绕过权限或强制模型调用。
+Skill 描述用于自动匹配；启用后由配置器合并的项目级指令要求相关开发前加载本 Skill。未确认项目可通过安装器或获准的用户级提醒发起首次确认；disabled 不自动启用或重复询问。Skill 自身不能替代宿主发现机制，也不能绕过权限或强制模型调用。

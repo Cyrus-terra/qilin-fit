@@ -23,7 +23,7 @@ class SkillPackageTests(unittest.TestCase):
         self.assertNotIn("disable-model-invocation:", frontmatter)
 
     def test_markdown_local_links_resolve(self):
-        for path in [ROOT / "README.md", *SKILL.rglob("*.md")]:
+        for path in [*ROOT.glob("*.md"), *SKILL.rglob("*.md")]:
             text = path.read_text(encoding="utf-8")
             for link in re.findall(r"\]\(([^)]+)\)", text):
                 if "://" in link or link.startswith("#"):
@@ -32,7 +32,7 @@ class SkillPackageTests(unittest.TestCase):
                 self.assertTrue(destination.exists(), "%s -> %s" % (path, link))
 
     def test_payload_complete_and_licensed(self):
-        for relative in ("LICENSE", "scripts/compat_audit.py", "assets/browser-probe.html",
+        for relative in ("LICENSE", "scripts/compat_audit.py", "scripts/setup.py", "assets/browser-probe.html",
                          "assets/support-matrix.example.json", "references/browser-matrix.md",
                          "references/css.md", "references/javascript.md", "references/platform.md",
                          "references/verification.md", "references/sources.md"):
@@ -40,7 +40,7 @@ class SkillPackageTests(unittest.TestCase):
         self.assertEqual((ROOT / "LICENSE").read_bytes(), (SKILL / "LICENSE").read_bytes())
 
     def test_python_syntax_parses_as_39(self):
-        for path in [ROOT / "scripts" / "install.py", SKILL / "scripts" / "compat_audit.py"]:
+        for path in [ROOT / "scripts" / "install.py", SKILL / "scripts" / "compat_audit.py", SKILL / "scripts" / "setup.py"]:
             ast.parse(path.read_text(encoding="utf-8"), feature_version=(3, 9))
 
 

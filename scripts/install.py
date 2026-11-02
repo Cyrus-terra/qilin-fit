@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Install the bundled skill into explicitly selected project discovery paths."""
 import argparse
+import importlib.util
 import shutil
 import sys
 from pathlib import Path
@@ -44,20 +45,59 @@ def install(target, agents, dry_run=False):
     return destinations
 
 
+def load_setup():
+    spec = importlib.util.spec_from_file_location("qilin_fit_setup", SOURCE / "scripts" / "setup.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="将同一标准 Skill 复制到各 Agent 的项目级发现目录；不修改项目指令或配置")
-    parser.add_argument("--target", required=True, help="现有项目目录；可使用绝对路径")
+    parser = argparse.ArgumentParser(description="安装 qilin-fit，并在交互终端首次询问当前项目是否启用；可选用户级安装及全局提醒")
+    parser.add_argument("--target", help="现有项目根目录；项目级安装必填")
+    parser.add_argument("--scope", choices=("project", "user"), default="project", help="默认 project；user 安装到当前用户目录")
+    parser.add_argument("--decision", choices=("ask", "enable", "disable", "reset", "status"), default="ask", help="项目首次选择；默认 ask，不在非交互环境擅自同意")
+    parser.add_argument("--global-reminder", action="store_true", help="仅用户级安装：额外询问是否合并跨项目首次确认提醒")
     parser.add_argument("--agent", action="append", required=True, choices=list(DIRECTORIES) + ["all"], help="可多次指定；all 安装三个 Agent")
     parser.add_argument("--dry-run", action="store_true", help="仅检查并列出目标，不写入")
     args = parser.parse_args(argv)
+    if args.scope == "project" and not args.target:
+        parser.error("项目级安装必须指定 --target")
+    if args.scope == "user" and args.target:
+        parser.error("用户级安装使用当前用户主目录，不接受 --target")
+    if args.scope == "project" and args.global_reminder:
+        parser.error("--global-reminder 仅用于 --scope user")
+    if args.scope == "user" and args.decision != "ask":
+        parser.error("--decision 用于项目状态；用户级安装的全局提醒会另行征求同意")
+    target = Path.home() if args.scope == "user" else args.target
     try:
-        destinations = install(args.target, args.agent, args.dry_run)
+        destinations = install(target, args.agent, args.dry_run)
     except (OSError, ValueError) as exc:
         print("安装失败：%s" % exc, file=sys.stderr)
         print("未覆盖既有 Skill；若发生写入阶段错误，请检查是否有部分新目录已创建。", file=sys.stderr)
         return 2
     for destination in destinations:
         print(("计划安装 " if args.dry_run else "已安装 ") + str(destination))
+    try:
+        setup = load_setup()
+        if args.scope == "project":
+            result = setup.configure_project(target, args.agent, args.decision, args.dry_run)
+        elif args.global_reminder:
+            result = setup.configure_global(Path.home(), args.agent, "ask", args.dry_run)
+        else:
+            result = None
+        if result is not None:
+            print("项目决定：" + result["decision"] if args.scope == "project" else "全局提醒：" + result["decision"])
+            for path in result["changed"]:
+                print(("计划配置 " if args.dry_run else "已配置 ") + str(path))
+            for note in result.get("notes", []):
+                print("注意：" + note)
+            if result["needsConfirmation"]:
+                print("待用户确认，未自动启用。请在 Agent 中加载 qilin-fit 并确认，或手动运行 Skill 内 scripts/setup.py。")
+    except (OSError, ValueError) as exc:
+        print("Skill 复制已完成或已预演，但首次配置失败：%s" % exc, file=sys.stderr)
+        print("不要重新覆盖安装；修复后直接运行 Skill 内 scripts/setup.py。", file=sys.stderr)
+        return 2
     print("重新启动 Agent 或按其文档刷新技能；自动匹配不是强制调用。")
     return 0
 
