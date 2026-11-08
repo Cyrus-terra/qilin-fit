@@ -22,7 +22,7 @@ metadata:
 2. 读取根目录 `.qilin-fit.json`，或用本 Skill 的 `scripts/setup.py --target <已确认项目根> --decision status` 查询。状态缺失为 unknown，损坏/未知格式须报告，不擅自覆盖。
 3. **enabled**：继续后续兼容工作流；相关开发无需用户每次重复声明。**disabled**：停止自动兼容流程，不重复询问、不自动配置。用户显式要求本次兼容检查/修复时可按本次授权执行，但不悄悄改变长期决定。
 4. **unknown**：通过 Agent 的用户对话提问：“是否为当前项目启用 qilin-fit 麒麟 / 奇安信兼容开发约束？启用会配置项目级规则；不启用会记住决定，不再自动询问；也可稍后决定。”只明确同意写 enabled，只明确拒绝写 disabled；取消或未回答保留 unknown，本会话不反复追问，先继续不依赖兼容约束的原始任务。
-5. 用户确认后，运行下面明确决定的命令；Agent shell 常为非交互，不要依赖脚本的 stdin 提问。`--agent` 选择当前/用户授权的客户端；要覆盖三个客户端先说明会更新哪些项目指令。不知道用哪个客户端时询问。
+5. 用户确认后，运行下面明确决定的命令；Agent shell 常为非交互，不要依赖脚本的 stdin 提问。`--agent` 选择当前/用户授权的客户端；要覆盖多个客户端先说明会更新哪些项目指令。不知道用哪个客户端时询问。
 
 ```sh
 # 先替换占位符为已确认路径，enable 仅在用户明确同意后执行
@@ -33,11 +33,13 @@ python3 "<skill-dir>/scripts/setup.py" --target "<project-root>" --decision disa
 python3 "<skill-dir>/scripts/setup.py" --target "<project-root>" --decision reset
 ```
 
-上面的客户端占位符应替换为 `codebuddy`、`claude` 或 `codex`；只有先说明并获准更新三个客户端指令时，才使用 `--agent all`。
+上面的客户端占位符为 `codebuddy`、`claude`、`codex`、`gemini`、`hermes` 或 `openclaw`；只有说明并获准覆盖六客户端时才使用项目配置器的 `--agent all`。项目规则对应 `CODEBUDDY.md`、`CLAUDE.md`、`GEMINI.md` 及 Codex/Hermes/OpenClaw 共享的 `AGENTS.md`；按路径去重。Hermes/OpenClaw 需核实宿主确实加载业务根的 AGENTS.md，Gemini 自定义上下文文件名也需核对；写入成功不代表宿主已加载。
 
 配置器保留块外指令，不改依赖/业务代码。enable/disable/reset 是项目配置更改，应与用户已确认范围一致；`--dry-run` 可预览。明确要求“仅本次检查，不启用项目规则”的任务可直接做只读审计，不能借此持久启用。
 
-用户级安装还需可选全局提醒，才能在此前未接触的新项目第一次相关开发时询问；仅复制标准 Skill 不具备启动/安装回调。`setup.py --global-reminder` 管理用户级提醒，必须另外获得授权，不因为本项目同意就修改全局。该入口依赖宿主加载用户级指令，不是强制弹窗或钩子。
+用户级安装还需可选全局提醒，才能在此前未接触的新项目第一次相关开发时询问；仅复制标准 Skill 不具备启动/安装回调。`setup.py --global-reminder` 仅自动支持 `codebuddy`、`claude`、`codex`、`gemini`，必须显式选当前/获授权客户端；全局 `all` 会因包含不支持项报错。提醒必须另外获得授权，不因为本项目同意就修改全局。Hermes/OpenClaw 不猜写用户级 profile/workspace，需显式加载或使用已核实的项目上下文。该入口依赖宿主加载用户级指令，不是强制弹窗或钩子。
+
+独立版与原生插件/扩展版共用本入口，每客户端二选一。插件封装不注册会话 Hook，不自动启用项目。CodeBuddy/Claude 独立版通常 `/qilin-fit`、插件版 `/qilin-fit:qilin-fit`；Codex `$qilin-fit` 或 `/skills`；Gemini `/skills list`、`/skills reload` 后要求使用；Hermes 独立版 `/qilin-fit`、插件版 `skill_view("qilin-fit:qilin-fit")`；OpenClaw 用 `openclaw skills list` / `openclaw skills check` 确认后要求使用。以宿主实际发现名称为准；支持模型不同不会改变安装格式。
 
 ## 1. 先确定支持契约
 

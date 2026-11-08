@@ -1,0 +1,10 @@
+{
+  "name": "qilin-fit",
+  "owner": {"name": "qilin-fit contributors"},
+  "plugins": [{
+    "name": "qilin-fit",
+    "version": "1.1.0",
+    "description": "Opt-in frontend browser compatibility workflow.",
+    "source": "./"
+  }]
+}

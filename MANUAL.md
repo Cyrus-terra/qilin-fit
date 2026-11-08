@@ -8,9 +8,9 @@
 
 ```sh
 # 先预览；目标必须是已存在的项目目录
-python3 scripts/install.py --target /path/to/your-project --agent all --dry-run
-# 复制标准 Skill 到三个 Agent 的项目级发现目录
-python3 scripts/install.py --target /path/to/your-project --agent all
+python3 scripts/install.py --target /path/to/your-project --agent codebuddy --agent claude --agent codex --agent gemini --dry-run
+# 复制到四个已支持自动项目级安装的发现目录
+python3 scripts/install.py --target /path/to/your-project --agent codebuddy --agent claude --agent codex --agent gemini
 # 或仅安装一个 Agent
 python3 scripts/install.py --target /path/to/your-project --agent codex
 ```
@@ -22,8 +22,38 @@ python3 scripts/install.py --target /path/to/your-project --agent codex
 | CodeBuddy Code | `.codebuddy/skills/qilin-fit/` | `~/.codebuddy/skills/` | `/qilin-fit` |
 | Claude Code | `.claude/skills/qilin-fit/` | `~/.claude/skills/` | `/qilin-fit` |
 | Codex | `.agents/skills/qilin-fit/` | `~/.agents/skills/` | `$qilin-fit`，或 `/skills` 选择 |
+| Gemini CLI | `.gemini/skills/qilin-fit/`，需信任项目 | `~/.gemini/skills/` | `/skills list`、`/skills reload` 后要求使用 qilin-fit |
+| Hermes Agent | 不自动推断，依版本 / 信任 / profile 手动处理 | `~/.hermes/skills/`，默认 profile | 独立版 `/qilin-fit`；插件版 `skill_view("qilin-fit:qilin-fit")` |
+| OpenClaw | 实际 workspace 的 `skills/qilin-fit/`，不由安装器推断 | `~/.openclaw/skills/`，默认 managed 目录 | `openclaw skills list` / `openclaw skills check` 后要求使用 qilin-fit |
 
 用户级安装时，将整个 `skills/qilin-fit/` 目录复制到表中用户级目录，不是只复制 `SKILL.md`。其他 Agent 按其官方 Skill 搜索路径放置同一目录即可。重启 Agent 或按客户端文档刷新技能列表。不要假设 CodeBuddy 会自动扫描 `.claude`，或当前 Codex 必须使用旧的 `.codex/skills` 路径。
+
+自动用户级安装支持六个默认布局：
+
+```sh
+# 平时只选当前客户端；需要全部六客户端时才选 all
+python3 scripts/install.py --scope user --agent all --dry-run
+python3 scripts/install.py --scope user --agent all
+```
+
+安装器中的 `all` 始终表示全部六客户端；项目级 `all` 明确报错，不会悄悄只装四项。Hermes 新版本可能支持可信项目 Skill，但涉及版本与信任配置，首版不自动处理；OpenClaw 的 `<workspace>/skills/` 与项目内 `.openclaw/skills/` 不同。自定义 profile / 状态目录必须先核实实际发现位置，不能盲写默认路径。安装器不会替用户配置这些宿主目录。
+
+### 原生插件与扩展
+
+每个客户端只保留原生版或独立版之一，避免重复发现及旧版覆盖。以下 `<repo-root>` 必须替换为已审阅的本仓库绝对路径；原生插件由宿主安装与更新，不能用独立安装器覆盖宿主插件目录。先核对当前客户端版本的帮助；遇到不支持的命令不要猜配置或绕过信任提示。
+
+| 客户端 | 从本地源码安装 / 发现 | 加载与更新 |
+| --- | --- | --- |
+| Claude Code | 会话测试 `claude --plugin-dir "<repo-root>"`；持久安装在客户端执行 `/plugin marketplace add <repo-root>`、`/plugin install qilin-fit@qilin-fit` | 插件 Skill 通常 `/qilin-fit:qilin-fit`；用 `/plugin` 管理更新，重启会话 |
+| CodeBuddy | 会话测试 `codebuddy --plugin-dir "<repo-root>"`；持久安装在客户端执行 `/plugin marketplace add <repo-root>`、`/plugin install qilin-fit@qilin-fit` | 插件 Skill 通常 `/qilin-fit:qilin-fit`；用 `/plugin` 管理更新，刷新或重启会话 |
+| Codex | `codex plugin marketplace add "<repo-root>"`，随后在 `/plugins` 安装 qilin-fit | `codex plugin marketplace upgrade qilin-fit` 刷新来源后，仍需核对 `/plugins` 安装副本并重启会话 |
+| Gemini CLI | `gemini extensions install "<repo-root>"`，用 `/extensions list` 检查 | `gemini extensions update qilin-fit`；更新后重启会话 |
+| Hermes Agent | 使用 `hermes plugins install <用户提供且已核实的仓库来源> --enable`；本地开发按宿主文档复制到当前 profile 的未占用插件目录并显式启用 | `hermes plugins list`、新版可用 `hermes plugins doctor`；`hermes plugins update qilin-fit` 后新建会话 |
+| OpenClaw | `openclaw plugins install --link "<repo-root>"`，使用 `openclaw plugins list` / `openclaw plugins inspect qilin-fit` 检查 | 本地链接跟随源码，不拉取远端更新；其他来源用宿主更新机制，按 Gateway 要求 reload / 新建对话 |
+
+仓库自带 Claude/CodeBuddy/Codex marketplace、Gemini 扩展、Hermes 注册模块和 OpenClaw 清单与 JS 入口，均复用 `skills/qilin-fit/`。不宣称进入官方市场、npm 或 ClawHub。OpenClaw 无 npm 依赖，不必运行 npm install。
+
+**原生安装只暴露 Skill，不注册 SessionStart / pre_llm_call Hook，不自动启用项目或写全局提醒。** 配置项目时仍须使用实际 Skill 内的 `scripts/setup.py` 并取得明确决定。Hermes 插件 Skill 使用命名空间 `qilin-fit:qilin-fit`，与独立副本不同；其余客户端以实际列出的名称为准。不要用复制成功替代宿主发现检查。
 
 ### 每个项目只确认一次
 
@@ -35,9 +65,9 @@ python3 scripts/install.py --target /path/to/your-project --agent codex
 | 不启用 | disabled | 不增加兼容规则；本项目不再自动询问 |
 | 稍后 / 空输入 / 取消 | unknown | 不自动启用；本会话不要反复追问，下次可再确认 |
 
-决定记录在业务项目根的 `.qilin-fit.json`，由三个 Agent 共享，不是每个 Agent 各问一次。文件可随仓库提交作为团队约定；它不是每位成员独立的个人偏好。损坏或未知格式会明确报错，不静默重置。
+决定记录在业务项目根的 `.qilin-fit.json`，由六个客户端共享，不是每个 Agent 各问一次。文件可随仓库提交作为团队约定；它不是每位成员独立的个人偏好。损坏或未知格式会明确报错，不静默重置。
 
-启用时在所选 `CODEBUDDY.md`、`CLAUDE.md`、`AGENTS.md` 中合并 qilin-fit 标记区块，保留其他内容；停用/重置会从三个文件中移除自己的区块，不删除文件。若新建 `CODEBUDDY.md` 会遮蔽已有 `AGENTS.md`，会保留 `@AGENTS.md` 引用，停用后也不移除此继承关系。检测到并行配置时会提示核对加载优先级。明确启用不代表内核已确认，仍不能默认 102。
+启用时按所选客户端，在 `CODEBUDDY.md`、`CLAUDE.md`、`AGENTS.md`、`GEMINI.md` 中合并标记区块；Codex/Hermes/OpenClaw 共用一个 `AGENTS.md`，去重写入。停用/重置清理全部四类文件的工具区块，不删除文件、保留其他内容。项目配置器的 `all` 可配置六客户端，不同于安装器的 scope 限制。Hermes/OpenClaw 只有实际加载该业务目录的 profile/workspace 时才读取项目规则；Gemini 自定义 `context.fileName` 也需人工核对。若新建 `CODEBUDDY.md` 会遮蔽已有 `AGENTS.md`，会保留 `@AGENTS.md` 引用，停用后也不移除此继承关系。检测到并行配置时会提示核对加载优先级。明确启用不代表内核已确认，仍不能默认 102。
 
 非交互安装（例如 Agent 的 shell 工具、CI 或管道）不会等待输入，也不会默认同意。Agent 应通过用户对话确认，再执行明确的启用或拒绝命令；没有回答不能当作拒绝。仅手动复制 Skill 文件夹也没有安装回调，首次加载后才执行确认流程。
 
@@ -64,8 +94,8 @@ python3 skills/qilin-fit/scripts/setup.py --target /path/to/your-project --decis
 
 
 ```sh
-python3 scripts/install.py --scope user --agent all --global-reminder --dry-run
-python3 scripts/install.py --scope user --agent all --global-reminder
+python3 scripts/install.py --scope user --agent gemini --global-reminder --dry-run
+python3 scripts/install.py --scope user --agent gemini --global-reminder
 ```
 
 `--global-reminder` 会在交互终端**另行征求授权**；同意才合并用户级指令，拒绝不修改全局指令。不会注册 hooks、不改现有 Agent 设置、不运行后台监控。非交互环境保持待确认；明确授权后可手动运行：
@@ -73,12 +103,14 @@ python3 scripts/install.py --scope user --agent all --global-reminder
 
 ```sh
 # 修改用户级指令前先预览；去掉 --dry-run 才会实际写入
-python3 skills/qilin-fit/scripts/setup.py --global-reminder --agent all --decision enable --dry-run
+python3 skills/qilin-fit/scripts/setup.py --global-reminder --agent codebuddy --agent claude --agent codex --agent gemini --decision enable --dry-run
 # 关闭全局提醒，不改已有项目决定
-python3 skills/qilin-fit/scripts/setup.py --global-reminder --agent all --decision disable
+python3 skills/qilin-fit/scripts/setup.py --global-reminder --agent codebuddy --agent claude --agent codex --agent gemini --decision disable
 ```
 
-全局提醒合并位置：CodeBuddy 的 `~/.codebuddy/CODEBUDDY.md`、Claude Code 的 `~/.claude/CLAUDE.md`、Codex 的 `$CODEX_HOME/AGENTS.md`（默认 `~/.codex/AGENTS.md`）。注意 Codex 的**指令目录**与 `~/.agents/skills/` 的**技能目录**不同。
+全局提醒仅自动支持 CodeBuddy、Claude、Codex、Gemini，必须显式选择；`--agent all` 或未指定客户端会因包含 Hermes/OpenClaw 而报错，混合选择在任何写入前拒绝。不猜写 Hermes profile、OpenClaw workspace、SOUL.md 或通用全局 AGENTS.md。它们可以显式加载 Skill，并在已确认业务根使用项目配置器。
+
+全局提醒合并位置：Gemini 的 `~/.gemini/GEMINI.md`、CodeBuddy 的 `~/.codebuddy/CODEBUDDY.md`、Claude Code 的 `~/.claude/CLAUDE.md`、Codex 的 `$CODEX_HOME/AGENTS.md`（默认 `~/.codex/AGENTS.md`）。注意 Codex 的**指令目录**与 `~/.agents/skills/` 的**技能目录**不同。
 
 全局提醒要求 Agent 在首次相关开发前确定实际业务项目根并检查状态；unknown 先问，disabled 跳过且不再问，enabled 按规则开发。不要把父工作区、主目录或嵌套项目随意视为同一个项目；根目录不明确时先确认，不能盲目用最外层 Git 根目录。
 
@@ -168,11 +200,20 @@ python3 skills/qilin-fit/scripts/setup.py --help
 python3 skills/qilin-fit/scripts/compat_audit.py --help
 ```
 
+### 客户端验证边界
+
+| 验证层次 | 仓库提供的检查 | 不能据此推断 |
+| --- | --- | --- |
+| 包结构与契约 | 六客户端 manifest / marketplace、共享载荷路径、版本一致、Python 3.9 语法与文档链接 | 宿主已安装或已激活 |
+| 适配器行为 | Hermes fake context 只注册 Skill、拒绝 Hook；OpenClaw 无依赖 JS 导入 | 真实 Hermes 会话、Gateway 加载成功 |
+| 安装与决定 | 临时目录六用户级 / 四项目级复制、共享状态、规则去重、拒绝及安全边界 | 用户真实 profile 已修改或项目已启用 |
+| 原生客户端 / 模型 / 真机 | 需另行在对应宿主和设备运行，并记录版本与实际结果 | 不能用本地单测替代，未执行应标记未验证 |
+
 提交兼容问题时，请提供已脱敏的系统/架构、产品及实际内核、最小复现、构建信息、预期/实际结果和真机截图；不要上传账号、客户地址、Cookie、访问令牌或原始业务数据。新增支持结论需注明上游来源和真机证据，区分确定性缺口、候选风险与厂商异常。
 
 本目录可作为独立 GitHub 仓库根目录发布；父工作区已有 Git 仓库，本交付不替你初始化嵌套仓库、不提交或推送，也不附带个人路径/客户原始规范。发布前确认 MIT 许可证符合你的开源计划，并审查全部待上传内容。
 
-格式参考：[Agent Skills](https://agentskills.io/specification)、[Claude Code skills](https://code.claude.com/docs/en/skills)、[Codex skills](https://developers.openai.com/codex/skills)。CodeBuddy 的路径与调用机制核对其安装包内 `cli/skills` 文档；客户端升级后以各自当前文档为准。本次文档核实不等于三个 CLI 的端到端实测。
+格式参考：[Agent Skills](https://agentskills.io/specification)、[Claude Code skills](https://code.claude.com/docs/en/skills)、[Codex skills](https://developers.openai.com/codex/skills)。CodeBuddy 的路径与调用机制核对其安装包内 `cli/skills` 文档；客户端升级后以各自当前文档为准。客户端封装参考相邻 supercoding 项目；本地打包与适配器测试不等于六个客户端的端到端实测。
 
 ## License
 

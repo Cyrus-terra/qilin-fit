@@ -2,7 +2,7 @@
 
 **让 Agent 在开发时就考虑麒麟 Linux 与奇安信浏览器兼容，而不是页面出问题后再打补丁。**
 
-适用于 CodeBuddy Code、Claude Code、Codex 等支持 Agent Skills 的代码 Agent。覆盖 CSS、JavaScript、组件库、构建产物，以及中文字体、输入法、弹窗、下载和打印等问题。
+适用于 **CodeBuddy Code、Claude Code、Codex、Gemini CLI、Hermes Agent 和 OpenClaw**。六个客户端共用同一份 Agent Skill，并提供原生插件 / 扩展封装及独立 Skill 安装方式。覆盖 CSS、JavaScript、组件库、构建产物，以及中文字体、输入法、弹窗、下载和打印等问题。
 
 ## 安装：把仓库地址交给 Agent
 
@@ -20,9 +20,33 @@
 
 Agent 会负责获取仓库、检查环境和安装。安装工具需要 Python 3.9+，无需额外 Python/npm 包；如果环境缺少依赖或权限，由 Agent 说明，不会擅自修改系统。下载、执行脚本和写入文件时，客户端可能要求你批准权限。
 
-**想让每个新项目都询问一次，安装时同意开启“新项目提醒”即可。** 如果不同意，只安装 Skill，仍可手动调用。安装后按客户端提示刷新技能或重启会话。
+**CodeBuddy、Claude、Codex、Gemini 可在安装时单独同意开启“新项目提醒”。** 如果不同意，只安装 Skill，仍可手动调用；Hermes / OpenClaw 不自动配置通用全局提醒，需在实际加载的项目上下文中显式使用。安装后按客户端提示刷新技能或重启会话。
 
 > 仓库地址只是安装来源，不能让客户端自动执行代码；仍需要 Agent 能访问仓库和本地文件，并按指引完成安装。不会因为打开 GitHub 页面就自动安装。
+
+## 多 Agent 客户端兼容
+
+这里的多 Agent 指不同 AI 客户端的安装与加载兼容，不是自动开启并发子代理。每个客户端选择**原生插件 / 扩展或独立 Skill 中的一种**，不要重复安装同名副本。
+
+| 客户端 | 原生封装 | 独立 Skill 默认用户级目录 | 自动项目级安装 | 可选全局提醒 |
+| --- | --- | --- | --- | --- |
+| CodeBuddy Code | plugin + marketplace | `~/.codebuddy/skills/qilin-fit/` | 支持 | `~/.codebuddy/CODEBUDDY.md` |
+| Claude Code | plugin + marketplace | `~/.claude/skills/qilin-fit/` | 支持 | `~/.claude/CLAUDE.md` |
+| Codex | plugin + 仓库 marketplace | `~/.agents/skills/qilin-fit/` | 支持 | `$CODEX_HOME/AGENTS.md`，默认 `~/.codex/AGENTS.md` |
+| Gemini CLI | extension | `~/.gemini/skills/qilin-fit/` | 支持，需信任项目 | `~/.gemini/GEMINI.md` |
+| Hermes Agent | plugin + Skill 注册 | `~/.hermes/skills/qilin-fit/` | 按版本、信任与 profile 手动核实 | 不自动配置 |
+| OpenClaw | plugin + 无依赖 JS 入口 | `~/.openclaw/skills/qilin-fit/` | 按实际 workspace 手动核实 | 不自动配置 |
+
+用户级默认布局可用 Python 3.9+ 安装；以下从已获取的本仓库根目录执行，默认只选择实际使用的客户端：
+
+```sh
+python3 scripts/install.py --scope user --agent gemini --dry-run
+python3 scripts/install.py --scope user --agent gemini
+```
+
+`--agent all` 表示全部六客户端，仅用户级独立安装可用；不是“当前范围支持的部分客户端”。项目级安装和全局提醒请显式选择支持的客户端。Hermes 自定义 profile、OpenClaw 状态目录 / workspace 以及其他自定义布局需先核实，不能照默认路径盲写。
+
+原生封装不自动配置全局提醒，不执行项目启用，也不注册会话 Hook。原生安装、刷新与验证步骤见 [手动安装与维护](MANUAL.md#原生插件与扩展)，Agent 操作流程见 [INSTALL.md](INSTALL.md)。仓库提供的是封装，不代表已进入官方市场、npm 或 ClawHub；本地包检查也不等于六客户端端到端验证。
 
 ## 安装后怎么用
 
@@ -36,7 +60,7 @@ Agent 会负责获取仓库、检查环境和安装。安装工具需要 Python 
 | **不启用** | 记住本项目的选择，不再自动询问或配置 |
 | **稍后决定** | 不启用，本会话不反复追问，下次仍可确认 |
 
-三个 Agent 共用项目根目录的 `.qilin-fit.json` 决定；它可以作为团队约定随仓库提交，不是每位成员分别选择。启用项目后，Agent 仍会确认实际浏览器版本，不能默认所有奇安信都是 Chromium 102。
+六个客户端共用项目根目录的 `.qilin-fit.json` 决定；它可以作为团队约定随仓库提交，不是每位成员分别选择。启用项目后，Agent 仍会确认实际浏览器版本，不能默认所有奇安信都是 Chromium 102。
 
 之后直接提出需求即可：
 
@@ -52,7 +76,7 @@ Agent 在已启用项目中应按兼容要求实现、检查并修复代码，�
 - “查看当前项目是否启用了 qilin-fit。”
 - “关闭所有新项目的 qilin-fit 提醒，保留已有项目的选择。”
 
-若未自动加载，也可以显式调用：CodeBuddy / Claude Code 输入 `/qilin-fit`；Codex 使用 `$qilin-fit` 或在 `/skills` 中选择。
+若未自动加载，可显式调用：CodeBuddy / Claude 独立版使用 `/qilin-fit`，插件版通常为 `/qilin-fit:qilin-fit`；Codex 使用 `$qilin-fit` 或 `/skills`；Gemini 使用 `/skills list`、`/skills reload` 后要求使用 qilin-fit；Hermes 独立版使用 `/qilin-fit`，插件版通过 `skill_view("qilin-fit:qilin-fit")`；OpenClaw 先用 `openclaw skills list` / `openclaw skills check` 确认，再要求使用 qilin-fit。以宿主实际列出的名称为准。
 
 ## 能解决什么
 

@@ -1,0 +1,10 @@
+{
+  "name": "qilin-fit",
+  "interface": {"displayName": "qilin-fit"},
+  "plugins": [{
+    "name": "qilin-fit",
+    "source": {"source": "local", "path": "./"},
+    "category": "Developer Tools",
+    "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}
+  }]
+}

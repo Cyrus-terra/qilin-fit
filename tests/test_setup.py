@@ -33,7 +33,7 @@ class SetupTests(unittest.TestCase):
     def configure(self, decision="ask", agents=("all",), dry_run=False):
         return setup.configure_project(self.project, agents, decision, dry_run)
 
-    def global_config(self, decision="ask", agents=("all",), dry_run=False):
+    def global_config(self, decision="ask", agents=setup.GLOBAL_AGENTS, dry_run=False):
         return setup.configure_global(self.home, agents, decision, dry_run)
 
     def state(self):
@@ -54,8 +54,8 @@ class SetupTests(unittest.TestCase):
             result = self.configure()
         self.assertEqual(result["decision"], "enabled")
         self.assertEqual(self.state(), {"schemaVersion": 1, "decision": "enabled"})
-        self.assertEqual(len(result["changed"]), 4)
-        for filename in setup.PROJECT_FILES.values():
+        self.assertEqual(len(result["changed"]), 5)
+        for filename in dict.fromkeys(setup.PROJECT_FILES.values()):
             self.assertIn("qilin-fit:project:begin", (self.project / filename).read_text())
 
     def test_tty_no_persists_disabled_without_rule_files(self):
@@ -102,31 +102,31 @@ class SetupTests(unittest.TestCase):
         with mock.patch("builtins.input", side_effect=AssertionError):
             self.assertTrue(self.configure(dry_run=True)["needsConfirmation"])
             result = self.configure("enable", dry_run=True)
-        self.assertEqual(len(result["changed"]), 4)
+        self.assertEqual(len(result["changed"]), 5)
         self.assertEqual(self.snapshot(), {})
 
     def test_transitions_and_reset_clean_all_agents_not_only_selected(self):
         self.configure("enable")
         self.configure("disable", ("codex",))
-        for filename in setup.PROJECT_FILES.values():
+        for filename in dict.fromkeys(setup.PROJECT_FILES.values()):
             self.assertEqual((self.project / filename).read_bytes(), b"")
         self.assertEqual(self.state()["decision"], "disabled")
         self.configure("enable")
         self.configure("reset", ("claude",))
         self.assertEqual(self.state()["decision"], "unknown")
-        for filename in setup.PROJECT_FILES.values():
+        for filename in dict.fromkeys(setup.PROJECT_FILES.values()):
             self.assertEqual((self.project / filename).read_bytes(), b"")
         with mock.patch.object(setup.sys.stdin, "isatty", return_value=True), mock.patch("builtins.input", return_value="y") as prompt:
             self.configure()
         prompt.assert_called_once()
 
     def test_crlf_and_non_utf8_outside_blocks_are_preserved(self):
-        for filename in setup.PROJECT_FILES.values():
+        for filename in dict.fromkeys(setup.PROJECT_FILES.values()):
             path = self.project / filename
             original = b"# user\r\n\xff keep\r\n"
             path.write_bytes(original)
         self.configure("enable")
-        for filename in setup.PROJECT_FILES.values():
+        for filename in dict.fromkeys(setup.PROJECT_FILES.values()):
             path = self.project / filename
             data = path.read_bytes()
             self.assertTrue(data.startswith(original))
@@ -134,7 +134,7 @@ class SetupTests(unittest.TestCase):
             path.write_bytes(data + b"after\r\n")
         self.configure("enable")
         self.configure("disable")
-        for filename in setup.PROJECT_FILES.values():
+        for filename in dict.fromkeys(setup.PROJECT_FILES.values()):
             self.assertEqual((self.project / filename).read_bytes(), original + b"after\r\n")
 
     def test_no_newline_outside_content_stays_unchanged(self):
@@ -322,7 +322,7 @@ class SetupTests(unittest.TestCase):
         with mock.patch.object(setup.sys.stdin, "isatty", return_value=True), mock.patch("builtins.input", return_value="y"):
             result = self.global_config()
         self.assertEqual(result["decision"], "enabled")
-        self.assertEqual(len(result["changed"]), 3)
+        self.assertEqual(len(result["changed"]), 4)
 
     def test_global_refusal_preserves_existing_enabled_files(self):
         self.global_config("enable")
@@ -348,12 +348,12 @@ class SetupTests(unittest.TestCase):
         with mock.patch.object(setup.sys.stdin, "isatty", return_value=False), mock.patch("builtins.input", side_effect=AssertionError):
             self.assertTrue(self.global_config()["needsConfirmation"])
             self.assertTrue(self.global_config(dry_run=True)["needsConfirmation"])
-            self.assertEqual(len(self.global_config("enable", dry_run=True)["changed"]), 3)
+            self.assertEqual(len(self.global_config("enable", dry_run=True)["changed"]), 4)
         self.assertEqual(self.snapshot(), {})
 
     def test_global_content_is_reminder_not_skill_or_hook(self):
         self.global_config("enable")
-        for path in (self.home / ".codebuddy" / "CODEBUDDY.md", self.home / ".claude" / "CLAUDE.md", self.home / ".codex" / "AGENTS.md"):
+        for path in (self.home / ".codebuddy" / "CODEBUDDY.md", self.home / ".claude" / "CLAUDE.md", self.home / ".codex" / "AGENTS.md", self.home / ".gemini" / "GEMINI.md"):
             content = path.read_text()
             for text in ("qilin-fit:reminder:begin", "不是 hook", "用户对话", "--decision enable/disable", "不反复追问", "全局指令目录与 Skill 目录不同"):
                 self.assertIn(text, content)
@@ -391,6 +391,52 @@ class SetupTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.global_config("enable")
         self.assertEqual(before, self.snapshot())
+
+    def test_shared_agents_file_is_written_once_and_reused_without_prompt(self):
+        result = self.configure("enable", ("codex", "hermes", "openclaw"))
+        rules = self.project / "AGENTS.md"
+        self.assertEqual(result["changed"], [str(rules), str(self.project / ".qilin-fit.json")])
+        self.assertEqual(rules.read_text().count("qilin-fit:project:begin"), 1)
+        with mock.patch("builtins.input", side_effect=AssertionError):
+            self.assertEqual(self.configure(agents=("hermes", "openclaw"))["changed"], [])
+            self.assertEqual(self.configure(agents=("gemini",))["changed"], [str(self.project / "GEMINI.md")])
+        self.assertTrue(any("workspace" in note for note in result["notes"]))
+
+    def test_unsupported_global_clients_rejected_without_partial_writes(self):
+        for agents in (("all",), ("hermes",), ("openclaw",), ("codebuddy", "hermes")):
+            for decision in setup.DECISIONS:
+                with self.subTest(agents=agents, decision=decision), self.assertRaisesRegex(ValueError, "用户级提醒"):
+                    self.global_config(decision, agents)
+                self.assertEqual(self.snapshot(), {})
+
+    def test_gemini_global_preserves_content_and_permissions(self):
+        path = self.home / ".gemini" / "GEMINI.md"
+        path.parent.mkdir()
+        path.write_bytes(b"user\r\n")
+        path.chmod(0o640)
+        self.global_config("enable", ("gemini",))
+        self.assertEqual(self.global_config("enable", ("gemini",))["changed"], [])
+        self.assertNotIn(b"\n", path.read_bytes().replace(b"\r\n", b""))
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o640)
+        self.global_config("disable", ("gemini",))
+        self.assertEqual(path.read_bytes(), b"user\r\n")
+
+    def test_gemini_bad_marker_and_link_preflight_before_any_writes(self):
+        path = self.home / ".gemini" / "GEMINI.md"
+        path.parent.mkdir()
+        path.write_bytes(b"<!-- qilin-fit:reminder:begin -->\n")
+        before = self.snapshot()
+        with self.assertRaises(ValueError):
+            self.global_config("enable")
+        self.assertEqual(before, self.snapshot())
+        path.unlink()
+        outside = self.root / "outside"
+        outside.write_bytes(b"safe")
+        path.symlink_to(outside)
+        with self.assertRaises(ValueError):
+            self.global_config("enable")
+        self.assertEqual(outside.read_bytes(), b"safe")
+        self.assertFalse((self.home / ".codebuddy").exists())
 
     def test_cli_requires_exclusive_project_or_global_mode(self):
         for arguments in ([], ["--target", str(self.project), "--global-reminder"], ["--home", str(self.home)]):

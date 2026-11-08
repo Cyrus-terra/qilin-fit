@@ -108,6 +108,18 @@ class CompatAuditTests(unittest.TestCase):
             self.assertIn("excluded-directory:dist", report["skipped"][0]["reason"])
             self.assertEqual(len(AUDIT.audit([str(root)], 80, True)["findings"]), 1)
 
+    def test_new_client_skill_payloads_are_not_browser_sources(self):
+        for folder in (".gemini", ".hermes", ".openclaw"):
+            path = self.put(folder + "/skills/qilin-fit/assets/browser-probe.html", "<script>structuredClone(x)</script>")
+            for target in (path, path.parent):
+                report = AUDIT.audit([str(target)], 80, include_build=True)
+                self.assertEqual(report["summary"]["filesScanned"], 0)
+                self.assertEqual(report["findings"], [])
+        self.put("src/app.js", "structuredClone(x)")
+        report = AUDIT.audit([str(self.root)], 80)
+        self.assertEqual(report["summary"]["filesScanned"], 1)
+        self.assertEqual(report["summary"]["findings"], 1)
+
     def test_ignored_symlinks_large_files_locks_and_maps(self):
         for folder in AUDIT.IGNORE:
             self.put(folder + "/app.js", "structuredClone(x)")

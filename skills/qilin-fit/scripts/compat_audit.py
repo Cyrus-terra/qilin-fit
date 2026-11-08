@@ -11,7 +11,7 @@ import sys
 EXTENSIONS = {".css", ".scss", ".less", ".js", ".jsx", ".ts", ".tsx",
               ".mjs", ".cjs", ".vue", ".svelte", ".html", ".json"}
 IGNORE = {".git", "node_modules", "vendor", ".venv", ".claude", ".codebuddy",
-          ".agents", "coverage"}
+          ".agents", ".gemini", ".hermes", ".openclaw", "coverage"}
 BUILD = {"dist", "build", ".next", "out"}
 LOCKS = {"package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml",
          "bun.lock", "bun.lockb"}

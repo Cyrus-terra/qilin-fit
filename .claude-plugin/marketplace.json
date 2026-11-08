@@ -1,0 +1,6 @@
+{
+  "name": "qilin-fit",
+  "owner": {"name": "qilin-fit contributors"},
+  "metadata": {"description": "Opt-in Kylin Linux and Qianxin browser compatibility workflow."},
+  "plugins": [{"name": "qilin-fit", "source": "./"}]
+}

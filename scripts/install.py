@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the bundled skill into explicitly selected project discovery paths."""
+"""Install the bundled Skill into explicitly selected client discovery paths."""
 import argparse
 import importlib.util
 import shutil
@@ -7,11 +7,21 @@ import sys
 from pathlib import Path
 
 NAME = "qilin-fit"
-DIRECTORIES = {"codebuddy": ".codebuddy", "claude": ".claude", "codex": ".agents"}
 SOURCE = Path(__file__).resolve().parents[1] / "skills" / NAME
 
 
-def install(target, agents, dry_run=False):
+def load_setup():
+    spec = importlib.util.spec_from_file_location("qilin_fit_setup", SOURCE / "scripts" / "setup.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+SETUP = load_setup()
+DIRECTORIES = {agent: client["directory"] for agent, client in SETUP.CLIENTS.items()}
+
+
+def install(target, agents, dry_run=False, scope="project"):
     target = Path(target).expanduser().resolve(strict=True)
     if not target.is_dir():
         raise ValueError("目标必须是现有项目目录")
@@ -23,7 +33,12 @@ def install(target, agents, dry_run=False):
     for item in SOURCE.rglob("*"):
         if item.is_symlink():
             raise ValueError("Skill 源目录不能包含符号链接：%s" % item)
-    selected = list(DIRECTORIES) if "all" in agents else list(dict.fromkeys(agents))
+    selected = SETUP._agents(agents)
+    if scope not in ("project", "user"):
+        raise ValueError("不支持的安装范围")
+    unsupported = [agent for agent in selected if scope == "project" and not SETUP.CLIENTS[agent]["project_install"]]
+    if unsupported:
+        raise ValueError("不支持自动项目级安装：{}；请使用用户级安装、原生插件，或核实实际 profile/workspace 后手动复制。all 表示全部六客户端。".format(", ".join(unsupported)))
     destinations = []
     for agent in selected:
         destination = target / DIRECTORIES[agent] / "skills" / NAME
@@ -45,20 +60,13 @@ def install(target, agents, dry_run=False):
     return destinations
 
 
-def load_setup():
-    spec = importlib.util.spec_from_file_location("qilin_fit_setup", SOURCE / "scripts" / "setup.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description="安装 qilin-fit，并在交互终端首次询问当前项目是否启用；可选用户级安装及全局提醒")
     parser.add_argument("--target", help="现有项目根目录；项目级安装必填")
     parser.add_argument("--scope", choices=("project", "user"), default="project", help="默认 project；user 安装到当前用户目录")
     parser.add_argument("--decision", choices=("ask", "enable", "disable", "reset", "status"), default="ask", help="项目首次选择；默认 ask，不在非交互环境擅自同意")
     parser.add_argument("--global-reminder", action="store_true", help="仅用户级安装：额外询问是否合并跨项目首次确认提醒")
-    parser.add_argument("--agent", action="append", required=True, choices=list(DIRECTORIES) + ["all"], help="可多次指定；all 安装三个 Agent")
+    parser.add_argument("--agent", action="append", required=True, choices=list(DIRECTORIES) + ["all"], help="可多次指定；all 表示六客户端，仅用户级安装可用")
     parser.add_argument("--dry-run", action="store_true", help="仅检查并列出目标，不写入")
     args = parser.parse_args(argv)
     if args.scope == "project" and not args.target:
@@ -71,7 +79,9 @@ def main(argv=None):
         parser.error("--decision 用于项目状态；用户级安装的全局提醒会另行征求同意")
     target = Path.home() if args.scope == "user" else args.target
     try:
-        destinations = install(target, args.agent, args.dry_run)
+        if args.global_reminder:
+            SETUP.validate_global_agents(args.agent)
+        destinations = install(target, args.agent, args.dry_run, args.scope)
     except (OSError, ValueError) as exc:
         print("安装失败：%s" % exc, file=sys.stderr)
         print("未覆盖既有 Skill；若发生写入阶段错误，请检查是否有部分新目录已创建。", file=sys.stderr)
@@ -79,11 +89,10 @@ def main(argv=None):
     for destination in destinations:
         print(("计划安装 " if args.dry_run else "已安装 ") + str(destination))
     try:
-        setup = load_setup()
         if args.scope == "project":
-            result = setup.configure_project(target, args.agent, args.decision, args.dry_run)
+            result = SETUP.configure_project(target, args.agent, args.decision, args.dry_run)
         elif args.global_reminder:
-            result = setup.configure_global(Path.home(), args.agent, "ask", args.dry_run)
+            result = SETUP.configure_global(Path.home(), args.agent, "ask", args.dry_run)
         else:
             result = None
         if result is not None:

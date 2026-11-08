@@ -9,8 +9,18 @@ import stat
 import sys
 import tempfile
 
-AGENTS = ("codebuddy", "claude", "codex")
-PROJECT_FILES = {"codebuddy": "CODEBUDDY.md", "claude": "CLAUDE.md", "codex": "AGENTS.md"}
+# Shared with the repository installer; keep this table inside the distributed Skill.
+CLIENTS = {
+    "codebuddy": {"directory": ".codebuddy", "project_file": "CODEBUDDY.md", "project_install": True, "global_file": ".codebuddy/CODEBUDDY.md"},
+    "claude": {"directory": ".claude", "project_file": "CLAUDE.md", "project_install": True, "global_file": ".claude/CLAUDE.md"},
+    "codex": {"directory": ".agents", "project_file": "AGENTS.md", "project_install": True, "global_file": ".codex/AGENTS.md"},
+    "gemini": {"directory": ".gemini", "project_file": "GEMINI.md", "project_install": True, "global_file": ".gemini/GEMINI.md"},
+    "hermes": {"directory": ".hermes", "project_file": "AGENTS.md", "project_install": False, "global_file": None},
+    "openclaw": {"directory": ".openclaw", "project_file": "AGENTS.md", "project_install": False, "global_file": None},
+}
+AGENTS = tuple(CLIENTS)
+PROJECT_FILES = {agent: client["project_file"] for agent, client in CLIENTS.items()}
+GLOBAL_AGENTS = tuple(agent for agent, client in CLIENTS.items() if client["global_file"] is not None)
 DECISIONS = ("ask", "enable", "disable", "reset", "status")
 PROJECT_BODY = """## Qilin Fit 项目约定
 
@@ -40,6 +50,14 @@ def _agents(agents):
     if any(value not in AGENTS + ("all",) for value in values):
         raise ValueError("不支持的客户端")
     return list(AGENTS) if not values or "all" in values else list(dict.fromkeys(values))
+
+
+def validate_global_agents(agents):
+    selected = _agents(agents)
+    unsupported = [agent for agent in selected if agent not in GLOBAL_AGENTS]
+    if unsupported:
+        raise ValueError("不支持自动配置用户级提醒：{}；请核实宿主实际加载的 profile/workspace 指令，不猜写全局路径。".format(", ".join(unsupported)))
+    return selected
 
 
 def _check_parents(path, root):
@@ -174,11 +192,16 @@ def configure_project(target, agents, decision="ask", dry_run=False):
         raise ValueError("不可将 Skill 根目录或其子目录设为业务项目")
     state_path = target / ".qilin-fit.json"
     current = _state(state_path, _read(state_path))
-    files = {target / PROJECT_FILES[agent]: _read(target / PROJECT_FILES[agent]) for agent in AGENTS}
+    files = {target / filename: _read(target / filename) for filename in dict.fromkeys(PROJECT_FILES.values())}
     for path, data in files.items():
         _span(data, "project", path)
     result = {"decision": current, "changed": [], "needsConfirmation": current == "unknown",
               "notes": _notes(files, "project")}
+    for agent in selected:
+        if agent in ("hermes", "openclaw"):
+            result["notes"].append("{}：项目 AGENTS.md 仅在宿主实际加载该业务目录/profile/workspace 时生效；写入不代表已发现或已加载。".format(agent))
+        elif agent == "gemini":
+            result["notes"].append("Gemini：使用默认 GEMINI.md；自定义 context.fileName 或受信任目录限制需人工核对。")
     for agent, directory in (("codebuddy", ".codebuddy"), ("claude", ".claude")):
         alternate = target / directory / PROJECT_FILES[agent]
         if agent in selected:
@@ -219,13 +242,13 @@ def configure_project(target, agents, decision="ask", dry_run=False):
 
 def configure_global(home, agents, decision="ask", dry_run=False):
     """可选用户级提醒，不安装 hook，也不替任何项目做授权决定。"""
-    selected = _agents(agents)
+    selected = validate_global_agents(agents)
     if decision not in DECISIONS:
         raise ValueError("不支持的决定")
     home = Path(home).expanduser().resolve()
     codex_home = Path(os.environ.get("CODEX_HOME", str(home / ".codex"))).expanduser().absolute()
-    paths = {"codebuddy": home / ".codebuddy" / "CODEBUDDY.md",
-             "claude": home / ".claude" / "CLAUDE.md", "codex": codex_home / "AGENTS.md"}
+    paths = {agent: home / CLIENTS[agent]["global_file"] for agent in GLOBAL_AGENTS}
+    paths["codex"] = codex_home / "AGENTS.md"
     roots = {agent: home for agent in AGENTS}
     if "CODEX_HOME" in os.environ:
         roots["codex"] = home if home in codex_home.parents or codex_home == home else Path(codex_home.anchor)
@@ -237,6 +260,8 @@ def configure_global(home, agents, decision="ask", dry_run=False):
     spans = [_span(data, "reminder", path) for path, data in files.items()]
     current = "enabled" if all(span is not None for span in spans) else ("disabled" if all(span is None for span in spans) else "unknown")
     result = {"decision": current, "changed": [], "needsConfirmation": False, "notes": _notes(files, "reminder")}
+    if "gemini" in selected:
+        result["notes"].append("Gemini：使用默认 ~/.gemini/GEMINI.md；自定义上下文文件名或配置目录需人工核对，写入不保证宿主加载。")
     if shadowed:
         result["notes"].append("{} 非空，会遮蔽 AGENTS.md；请先人工合并或移除 override，当前提醒不能保证生效。".format(override))
         result["decision"] = "unknown"
@@ -272,7 +297,7 @@ def main(argv=None):
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--target", type=Path, help="已存在的业务项目目录")
     mode.add_argument("--global-reminder", action="store_true", help="配置可选用户级提醒，影响以后的项目")
-    parser.add_argument("--agent", action="append", choices=("all",) + AGENTS, help="可重复指定，默认 all")
+    parser.add_argument("--agent", action="append", choices=("all",) + AGENTS, help="可重复指定；项目默认 all（六客户端），全局提醒必须显式选择支持的客户端")
     parser.add_argument("--decision", choices=DECISIONS, default="ask")
     parser.add_argument("--dry-run", action="store_true", help="仅预览，不询问、不写入")
     args = parser.parse_args(argv)
